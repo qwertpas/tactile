@@ -46,6 +46,7 @@ void standby() {
 
 void diagnose() {
   streaming = false;
+  Serial.printf("BLE advertisement: %s\n", NimBLEDevice::getAdvertising()->getAdvertisementData().toString().c_str());
   for (uint32_t clock : {100000u, 400000u}) {
     digitalWrite(RESET, LOW); delay(10); digitalWrite(RESET, HIGH); delay(10);
     Wire.setClock(clock);

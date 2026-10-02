@@ -144,21 +144,22 @@ playback, haptics, and Stop were exercised together. Audio reported 5.3 ms base 
 32 ms output latency. Browser fixture checks covered all sound modes, common zero,
 step response, stale input, and rejection of late packets from previous streams.
 
-The initial BLE checks ran with the mux disconnected, so they did not verify
-live BMP585 acquisition or physical motor amplitude. Use `ble/check.py --sensors`
-with the mux attached to verify the actual four sensors.
+After the user repaired a bad connection, all four BMP585 sensors returned the
+correct chip IDs. A 30-second real-sensor check delivered 59,652 samples at
+492.2–498.1 Hz per channel, with zero gaps, I2C errors, FIFO-full events, or drops.
+Both BLE links used 15 ms intervals. Motor duty endpoints, watchdog stop,
+disconnect stop, and reconnection passed. Physical motor amplitude was not measured.
+The published page then received 277,689 real samples with zero gaps or faults.
+Shared zeroing, AudioWorklet playback, pressure-dependent motor duty, and Stop
+were exercised together. Browser intervals were 15 ms for pressure and 30 ms
+for vibration; audio reported 5.3 ms base plus 32 ms output latency.
+A ten-second native repeat reported 559 BLE samples dropped without I2C errors.
+The final 30-second reconnect check passed with 59,738 real samples, zero gaps,
+errors, FIFO-full events, or drops, and both links at 15 ms. Both service UUIDs
+were visible after disconnecting.
 
-The first test after attaching the real sensor assembly failed: all four sensors
-initialized once, then accumulated 284–286 I2C errors each and 6–7 FIFO-full
-events in 30 seconds. An invalid all-high pressure word was also received. Later
-attempts failed at the mux write; the original serial firmware failed at the same
-operation. Real acquisition has not passed verification. BLE status identifies the failed
-initialization operation and reports GPIO8–12 pin levels. The page rejects the
-invalid pressure word and stops haptics rather than mapping it to full duty.
-After replugging, no mux address acknowledged at either 100 or 400 kHz, even
-after mux reset and with RESET pulled high. Yesterday's original firmware and
-board settings also failed today, as did a full sensor power cycle. The user
-confirmed 3.3 V on every connector line except GND at idle; driven-low signal
-measurements are still needed to verify continuity.
-The browser integration check passed with the invalid word injected while
-haptics were active: the motor stopped and the shared pressure stayed unchanged.
+The broken connection previously caused I2C failures and an invalid all-high
+pressure word. BLE status identifies initialization failures and reports GPIO8–12
+pin levels. The page rejects invalid pressure words and stops haptics. The browser
+fixture passed with the invalid word injected while haptics were active: the motor
+stopped and the shared pressure stayed unchanged.
