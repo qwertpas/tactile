@@ -137,6 +137,15 @@ playback, haptics, and Stop were exercised together. Audio reported 5.3 ms base 
 32 ms output latency. Browser fixture checks covered all sound modes, common zero,
 step response, stale input, and rejection of late packets from previous streams.
 
-The mux is still disconnected, so live BMP585 acquisition with this BLE firmware
-and physical motor amplitude have not been measured. Use `ble/check.py --sensors`
-after wiring the mux to verify the actual four sensors.
+The initial BLE checks ran with the mux disconnected, so they did not verify
+live BMP585 acquisition or physical motor amplitude. Use `ble/check.py --sensors`
+with the mux attached to verify the actual four sensors.
+
+The first test after attaching the real sensor assembly failed: all four sensors
+initialized once, then accumulated 284–286 I2C errors each and 6–7 FIFO-full
+events in 30 seconds. An invalid all-high pressure word was also received. Later
+attempts failed at the mux write; the original serial firmware failed at the same
+operation. This points to an intermittent assembly connection or power problem;
+real acquisition has not passed verification. BLE status now identifies the failed
+initialization operation and reports GPIO8–12 pin levels. The page rejects the
+invalid pressure word and stops haptics rather than mapping it to full duty.

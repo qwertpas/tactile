@@ -18,7 +18,9 @@ export function decode(view) {
   if (sensor > 3 || count < 1 || count > 16 || view.byteLength !== 16 + count * 3) throw Error('Invalid pressure packet length');
   const values = Array.from({ length: count }, (_, i) => {
     const offset = 16 + i * 3;
-    return (view.getUint8(offset) | view.getUint8(offset + 1) << 8 | view.getUint8(offset + 2) << 16) / 64000;
+    const raw = view.getUint8(offset) | view.getUint8(offset + 1) << 8 | view.getUint8(offset + 2) << 16;
+    if (raw === 0xffffff) throw Error('Invalid sensor pressure; check the connector and click Read sensors.');
+    return raw / 64000;
   });
   return { sensor, count, flags, generation: flags >> 2, sequence: view.getUint32(4, true), time: view.getUint32(8, true),
     errors: view.getUint16(12, true), dropped: view.getUint16(14, true), values };

@@ -16,14 +16,17 @@ bool streaming = false, demo = false;
 uint8_t generation = 0;
 uint32_t samples[4]{}, errors[4]{}, full[4]{}, dropped[4]{};
 const char *message = "Ready";
+char fault[128];
 int64_t nextDemo = 0, demoStart = 0;
 uint8_t notification[244];
 size_t used = 0;
 uint8_t pending[4]{};
+uint8_t busError = 0;
 
 bool selectChannel(uint8_t channel) {
   Wire.beginTransmission(0x70); Wire.write(1 << channel);
-  return Wire.endTransmission() == 0;
+  busError = Wire.endTransmission();
+  return busError == 0;
 }
 bool writeReg(uint8_t address, uint8_t reg, uint8_t value) {
   Wire.beginTransmission(address); Wire.write(reg); Wire.write(value);
@@ -45,30 +48,40 @@ bool configure() {
   for (int sensor = 0; sensor < 4; ++sensor) {
     const uint8_t address = ADDRESSES[sensor % 2];
     uint8_t id[2], nvm, settings[2];
-    if (!selectChannel(CHANNELS[sensor / 2]) || !readReg(address, 1, id, 2) ||
-        id[0] != 0x51 || !readReg(address, 0x28, &nvm, 1) || (nvm & 0x0e) != 2 ||
-        !writeReg(address, 0x37, 0x80)) return false;
+    auto fail = [sensor, address](const char *step, uint8_t value = 0) {
+      snprintf(fault, sizeof(fault), "CH%u 0x%02x: %s (0x%02x)", CHANNELS[sensor / 2], address, step, value);
+      message = fault;
+      Serial.println(message);
+      return false;
+    };
+    if (!selectChannel(CHANNELS[sensor / 2])) return fail("mux write failed", busError);
+    if (!readReg(address, 1, id, 2)) return fail("chip ID read failed");
+    if (id[0] != 0x51) return fail("unexpected chip ID", id[0]);
+    if (!readReg(address, 0x28, &nvm, 1)) return fail("NVM status read failed");
+    if ((nvm & 0x0e) != 2) return fail("NVM not ready", nvm);
+    if (!writeReg(address, 0x37, 0x80)) return fail("standby write failed");
     delay(4);
     if (!writeReg(address, 0x18, 0) || !writeReg(address, 0x36, 0x40) ||
         !writeReg(address, 0x31, 0) || !writeReg(address, 0x16, 0) ||
         !writeReg(address, 0x18, 3) || !writeReg(address, 0x15, 2) ||
         !writeReg(address, 0x37, 0x83) || !readReg(address, 0x36, settings, 2) ||
-        settings[0] != 0x40 || settings[1] != 0x83) return false;
+        settings[0] != 0x40 || settings[1] != 0x83) return fail("configuration failed");
   }
   return true;
 }
 
 void updateStatus() {
-  char text[480];
+  char text[640];
   snprintf(text, sizeof(text),
       "{\"generation\":%u,\"streaming\":%s,\"demo\":%s,\"message\":\"%s\",\"mtu\":%u,\"interval\":%u,"
       "\"samples\":[%lu,%lu,%lu,%lu],\"errors\":[%lu,%lu,%lu,%lu],"
-      "\"full\":[%lu,%lu,%lu,%lu],\"dropped\":[%lu,%lu,%lu,%lu]}",
+      "\"full\":[%lu,%lu,%lu,%lu],\"dropped\":[%lu,%lu,%lu,%lu],\"pins\":[%d,%d,%d,%d,%d]}",
       generation, streaming ? "true" : "false", demo ? "true" : "false", message, mtu.load(), interval.load(),
       (unsigned long)samples[0], (unsigned long)samples[1], (unsigned long)samples[2], (unsigned long)samples[3],
       (unsigned long)errors[0], (unsigned long)errors[1], (unsigned long)errors[2], (unsigned long)errors[3],
       (unsigned long)full[0], (unsigned long)full[1], (unsigned long)full[2], (unsigned long)full[3],
-      (unsigned long)dropped[0], (unsigned long)dropped[1], (unsigned long)dropped[2], (unsigned long)dropped[3]);
+      (unsigned long)dropped[0], (unsigned long)dropped[1], (unsigned long)dropped[2], (unsigned long)dropped[3],
+      digitalRead(POWER), digitalRead(CLOCK), digitalRead(DATA), digitalRead(RESET), digitalRead(GROUND));
   status->setValue(text);
 }
 
@@ -157,7 +170,7 @@ void loop() {
       memset(full, 0, sizeof(full)); memset(dropped, 0, sizeof(dropped));
       streaming = subscribed.load() && (demo || configure());
       if (!streaming && !demo) standby();
-      message = streaming ? (demo ? "Test stream" : "Sensors running") : "Sensor initialization failed; check mux connection";
+      if (streaming) message = demo ? "Test stream" : "Sensors running";
       nextDemo = demoStart = esp_timer_get_time();
     } else message = "Stopped";
     updateStatus();

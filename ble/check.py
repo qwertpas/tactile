@@ -3,7 +3,6 @@ import argparse
 import asyncio
 import json
 import math
-import statistics
 import struct
 import time
 from bleak import BleakClient, BleakScanner
@@ -25,6 +24,7 @@ async def main(args):
     print('Found both boards over BLE', flush=True)
     counts, expected, gaps = [0]*4, [None]*4, [0]*4
     latest, times = [math.nan]*4, [0]*4
+    low, high = [math.inf]*4, [-math.inf]*4
     demo_flags = set()
     notified, errors = [], []
     sequence = 0
@@ -71,8 +71,11 @@ async def main(args):
                     gaps[sensor_id] += (first - expected[sensor_id]) & 0xffffffff
                 expected[sensor_id] = (first + count) & 0xffffffff
                 counts[sensor_id] += count
-                p = int.from_bytes(data[-3:], 'little') / 64000
-                assert 30 <= p <= 150, p
+                values = [int.from_bytes(data[i:i+3], 'little') / 64000 for i in range(16, len(data), 3)]
+                assert all(30 <= p <= 150 for p in values), values
+                low[sensor_id] = min(low[sensor_id], *values)
+                high[sensor_id] = max(high[sensor_id], *values)
+                p = values[-1]
                 latest[sensor_id] = p
                 times[sensor_id] = time.perf_counter()
                 notified.append((times[sensor_id], sensor_id, first, count, p))
@@ -103,8 +106,12 @@ async def main(args):
         writes = 0
         max_age = 0
         last_duty, last_write = None, 0
-        # Raw max pressure, one simple linear map, no smoothing. Demo zero is 100 kPa.
+        baseline = None
+        # The same first complete baseline and highest relative pressure as the page.
         try:
+            await asyncio.sleep(.2)
+            status = json.loads(await sensor.read_gatt_char(SENSOR_STATUS))
+            assert status['streaming'], status
             while time.perf_counter() - start < args.seconds:
                 try:
                     await asyncio.wait_for(changed.wait(), timeout=.04)
@@ -113,8 +120,11 @@ async def main(args):
                 changed.clear()
                 now = time.perf_counter()
                 if all(math.isfinite(p) for p in latest):
+                    if baseline is None:
+                        baseline = latest.copy()
                     max_age = max(max_age, (now - min(times)) * 1000)
-                    duty = 0 if now - min(times) >= .1 else round(1023 * (.2 + .8 * max(0, min(1, (max(latest) - 100) / 30))))
+                    relative = [p - zero for p, zero in zip(latest, baseline)]
+                    duty = 0 if now - min(times) >= .1 else round(1023 * (.2 + .8 * max(0, min(1, max(relative) / 30))))
                     if duty != last_duty or now - last_write >= .04:
                         await drive(duty)
                         last_duty, last_write = duty, now
@@ -135,6 +145,7 @@ async def main(args):
         assert all(v == 0 for key in ('errors', 'full', 'dropped') for v in status[key]), status
         print(f'PASS {sum(counts)} samples; per-sensor Hz {[round(r,1) for r in rates]}; gaps={gaps}', flush=True)
         print(f'Motor updates {writes / elapsed:.1f} Hz; max oldest-sensor age {max_age:.1f} ms', flush=True)
+        print('Absolute pressure ranges kPa:', list(zip(low, high)), flush=True)
         print('Motor:', await read_motor(), flush=True)
         # Stop on link loss, independent of laptop keepalive.
         await drive(205, True)

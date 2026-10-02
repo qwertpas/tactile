@@ -86,6 +86,10 @@ test('BLE writer sends newest pressure and immediate stop after an in-flight wri
 
 test('malformed BLE data is rejected, sample gaps and faults are counted', () => {
   assert.throws(() => decode(new DataView(new ArrayBuffer(18))));
+  const invalid = new DataView(new ArrayBuffer(19));
+  invalid.setUint8(0, 1); invalid.setUint8(2, 1);
+  for (let i = 16; i < 19; ++i) invalid.setUint8(i, 255);
+  assert.throws(() => decode(invalid), /Invalid sensor pressure/);
   const state = new Pressures();
   state.ingest(packet(0, [100], 0), 0); state.ingest(packet(0, [101], 4), 1);
   assert.equal(state.gaps[0], 3);
