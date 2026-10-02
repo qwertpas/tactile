@@ -124,11 +124,11 @@ References: [Web Bluetooth](https://developer.chrome.com/docs/capabilities/bluet
 ## Verified October 2, 2026
 
 Both BLE firmwares were flashed and verified on the USB-connected boards. A
-30-second integration check delivered 60,288 synthetic pressure samples at
-499.1 Hz per channel, with zero gaps, errors, FIFO-full events, or firmware drops.
-It sent motor commands at 173.7 Hz and verified endpoint duties, invalid-command
+30-second integration check delivered 60,116 synthetic pressure samples at
+499.0 Hz per channel, with zero gaps, errors, FIFO-full events, or firmware drops.
+It sent new motor values at 69.7 Hz and verified endpoint duties, invalid-command
 rejection, watchdog stop, disconnect stop, and reconnection. The maximum time since
-the oldest sensor notification was received was 44.5 ms; this is not a measurement
+the oldest sensor notification was received was 42.8 ms; this is not a measurement
 of sensor-to-motor latency.
 
 Chrome subsequently ran both real BLE connections at 15 ms intervals, with over

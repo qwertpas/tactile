@@ -28,6 +28,7 @@ async def main(args):
     demo_flags = set()
     notified, errors = [], []
     sequence = 0
+    changed = asyncio.Event()
     async with BleakClient(devices['Tactile Pressure']) as sensor, BleakClient(devices['Tactile Vibration']) as motor:
         print('Connected both:', sensor.mtu_size, motor.mtu_size, 'MTU', flush=True)
 
@@ -87,6 +88,7 @@ async def main(args):
                 size = 16 + data[offset + 2] * 3
                 pressure_packet(data[offset:offset + size])
                 offset += size
+            changed.set()
 
         await sensor.start_notify(PRESSURE, pressure)
         if not args.sensors:
@@ -100,16 +102,23 @@ async def main(args):
         status = None
         writes = 0
         max_age = 0
+        last_duty, last_write = None, 0
         # Raw max pressure, one simple linear map, no smoothing. Demo zero is 100 kPa.
         try:
             while time.perf_counter() - start < args.seconds:
+                try:
+                    await asyncio.wait_for(changed.wait(), timeout=.04)
+                except asyncio.TimeoutError:
+                    pass
+                changed.clear()
                 now = time.perf_counter()
                 if all(math.isfinite(p) for p in latest):
                     max_age = max(max_age, (now - min(times)) * 1000)
-                    duty = round(1023 * (.2 + .8 * max(0, min(1, (max(latest) - 100) / 30))))
-                    await drive(duty)
-                    writes += 1
-                await asyncio.sleep(.005)
+                    duty = 0 if now - min(times) >= .1 else round(1023 * (.2 + .8 * max(0, min(1, (max(latest) - 100) / 30))))
+                    if duty != last_duty or now - last_write >= .04:
+                        await drive(duty)
+                        last_duty, last_write = duty, now
+                        writes += 1
             await drive(0, True)
             status = json.loads(await sensor.read_gatt_char(SENSOR_STATUS))
             print('Sensor status:', status, flush=True)
