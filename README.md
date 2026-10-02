@@ -98,6 +98,9 @@ connections before running it. `--sensors` checks the actual BMP585 stream inste
 For bus diagnostics, stop acquisition and send `?` over the SuperMini USB serial
 port. This resets the mux, checks addresses 0x70–0x77 and sensor IDs on channels
 2 and 6 at 100 and 400 kHz, then restores 400 kHz. Run one serial process at a time.
+For connector measurements, `C`, `A`, and `R` stop acquisition and hold SCL,
+SDA, or RESET low, respectively. Measure against connector GND. `H` releases
+the signals and restores I2C; acquisition stays stopped until started again.
 
 For the browser integration fixture, serve the repository root and open
 `/tests/browser.html`, then click **Run browser check**. It uses simulated BLE
@@ -149,11 +152,13 @@ The first test after attaching the real sensor assembly failed: all four sensors
 initialized once, then accumulated 284–286 I2C errors each and 6–7 FIFO-full
 events in 30 seconds. An invalid all-high pressure word was also received. Later
 attempts failed at the mux write; the original serial firmware failed at the same
-operation. This points to an intermittent assembly connection or power problem;
-real acquisition has not passed verification. BLE status now identifies the failed
+operation. Real acquisition has not passed verification. BLE status identifies the failed
 initialization operation and reports GPIO8–12 pin levels. The page rejects the
 invalid pressure word and stops haptics rather than mapping it to full duty.
 After replugging, no mux address acknowledged at either 100 or 400 kHz, even
-after mux reset and with RESET pulled high. The connector still needs checking.
+after mux reset and with RESET pulled high. Yesterday's original firmware and
+board settings also failed today, as did a full sensor power cycle. The user
+confirmed 3.3 V on every connector line except GND at idle; driven-low signal
+measurements are still needed to verify continuity.
 The browser integration check passed with the invalid word injected while
 haptics were active: the motor stopped and the shared pressure stayed unchanged.

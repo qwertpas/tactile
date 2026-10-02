@@ -74,6 +74,18 @@ void diagnose() {
   message = "Stopped";
 }
 
+void holdPin(int pin) {
+  streaming = false; Wire.end();
+  for (int p = 9; p <= 11; ++p) {
+    pinMode(p, OUTPUT_OPEN_DRAIN | INPUT_PULLUP); digitalWrite(p, HIGH);
+  }
+  if (pin >= 0) digitalWrite(pin, LOW);
+  else { Wire.begin(DATA, CLOCK, 400000); Wire.setTimeOut(10); }
+  message = pin >= 0 ? "Connector continuity test" : "Stopped";
+  Serial.printf("DIAG hold=%d SCL=%d SDA=%d RESET=%d\n", pin,
+                digitalRead(CLOCK), digitalRead(DATA), digitalRead(RESET));
+}
+
 bool configure() {
   for (int sensor = 0; sensor < 4; ++sensor) {
     const uint8_t address = ADDRESSES[sensor % 2];
@@ -190,7 +202,15 @@ void setup() {
 }
 
 void loop() {
-  if (Serial.available() && Serial.read() == '?') diagnose();
+  if (Serial.available()) {
+    switch (Serial.read()) {
+      case '?': diagnose(); break;
+      case 'C': holdPin(CLOCK); break;
+      case 'A': holdPin(DATA); break;
+      case 'R': holdPin(RESET); break;
+      case 'H': holdPin(-1); break;
+    }
+  }
   if (const char command = request.exchange(0)) {
     streaming = false;
     if (!demo) standby();
