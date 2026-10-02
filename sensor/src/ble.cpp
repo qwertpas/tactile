@@ -44,6 +44,36 @@ void standby() {
     if (selectChannel(channel)) for (auto address : ADDRESSES) writeReg(address, 0x37, 0x80);
 }
 
+void diagnose() {
+  streaming = false;
+  for (uint32_t clock : {100000u, 400000u}) {
+    digitalWrite(RESET, LOW); delay(10); digitalWrite(RESET, HIGH); delay(10);
+    Wire.setClock(clock);
+    Serial.printf("DIAG clock=%lu pins=%d,%d,%d,%d,%d\n", (unsigned long)clock,
+                  digitalRead(POWER), digitalRead(CLOCK), digitalRead(DATA), digitalRead(RESET), digitalRead(GROUND));
+    for (uint8_t address = 0x70; address <= 0x77; ++address) {
+      Wire.beginTransmission(address); Wire.write(uint8_t(0));
+      const auto result = Wire.endTransmission();
+      const auto count = Wire.requestFrom(address, size_t(1));
+      const int control = count ? Wire.read() : -1;
+      Serial.printf("DIAG mux=0x%02x write=%u read=%u control=%d\n", address, result, count, control);
+    }
+    for (auto channel : CHANNELS) {
+      digitalWrite(RESET, LOW); delay(10); digitalWrite(RESET, HIGH); delay(10);
+      const bool selected = selectChannel(channel);
+      Serial.printf("DIAG channel=%u selected=%d\n", channel, selected);
+      if (selected) for (auto address : ADDRESSES) {
+        uint8_t id[2]{};
+        const bool read = readReg(address, 1, id, 2);
+        Serial.printf("DIAG sensor=0x%02x read=%d id=0x%02x revision=0x%02x\n", address, read, id[0], id[1]);
+      }
+    }
+  }
+  Wire.setClock(400000);
+  digitalWrite(RESET, LOW); delay(10); digitalWrite(RESET, HIGH); delay(10);
+  message = "Stopped";
+}
+
 bool configure() {
   for (int sensor = 0; sensor < 4; ++sensor) {
     const uint8_t address = ADDRESSES[sensor % 2];
@@ -137,7 +167,7 @@ void setup() {
   pinMode(GROUND, OUTPUT | INPUT); digitalWrite(GROUND, LOW);
   pinMode(POWER, OUTPUT | INPUT); digitalWrite(POWER, LOW);
   delay(100); digitalWrite(POWER, HIGH); delay(20);
-  pinMode(RESET, OUTPUT_OPEN_DRAIN | INPUT);
+  pinMode(RESET, OUTPUT_OPEN_DRAIN | INPUT_PULLUP);
   digitalWrite(RESET, LOW); delay(10); digitalWrite(RESET, HIGH); delay(10);
   Serial.begin(115200);
   Wire.setBufferSize(128); Wire.begin(DATA, CLOCK, 400000); Wire.setTimeOut(10);
@@ -160,6 +190,7 @@ void setup() {
 }
 
 void loop() {
+  if (Serial.available() && Serial.read() == '?') diagnose();
   if (const char command = request.exchange(0)) {
     streaming = false;
     if (!demo) standby();

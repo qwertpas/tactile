@@ -76,10 +76,17 @@ button.onclick=async()=>{
   assert([...Array(4)].every((_,i)=>get(`p${i}`).textContent==='0.00 kPa'),'Zero shared pressures');
   assert(duty===205,'Zero motor maps to 20%');
   hold=[5,5,5,5];await wait(50);assert(get('p0').textContent==='5.00 kPa','Immediate pressure step after zero');
+  const bad=new DataView(new ArrayBuffer(19));bad.setUint8(0,1);bad.setUint8(2,1);bad.setUint8(3,1 | generation << 2);
+  bad.setUint32(4,counts[0],true);for(let i=16;i<19;++i)bad.setUint8(i,255);
+  chars.get(ids.pressure).emit(bad);await wait(50);
+  assert(duty===0,'Invalid sensor word stops haptics');
+  assert(get('p0').textContent==='5.00 kPa','Invalid pressure never reaches shared outputs');
+  assert(get('error').textContent.includes('Invalid sensor pressure'),'Acquisition failure visible');
+  get('haptic').click();await wait(50);
   get('haptic').click();await wait(50);assert(duty===0,'Stop immediate');
   get('sound').click();streaming=false;await wait(150);assert(get('haptic').disabled,'Stale pressure disables haptics');
   get('restart').click();await wait(300);wave=true;
-  note.firstChild.textContent='PASS · shared zero / max-pressure PWM / all four audio modes / stop / stale input. Simulated BLE devices.';
+  note.firstChild.textContent='PASS · shared zero / max-pressure PWM / all four audio modes / invalid sensor word / stop / stale input. Simulated BLE devices.';
  } catch(e) {note.firstChild.textContent='FAIL: '+e.message;throw e;}
 };
 </script></body></html>

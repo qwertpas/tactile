@@ -95,6 +95,10 @@ commands, watchdog and disconnect stops, missing-mux reporting, 500 Hz synthetic
 streaming, sequence gaps, counters, and simultaneous motor commands. Stop browser
 connections before running it. `--sensors` checks the actual BMP585 stream instead.
 
+For bus diagnostics, stop acquisition and send `?` over the SuperMini USB serial
+port. This resets the mux, checks addresses 0x70–0x77 and sensor IDs on channels
+2 and 6 at 100 and 400 kHz, then restores 400 kHz. Run one serial process at a time.
+
 For the browser integration fixture, serve the repository root and open
 `/tests/browser.html`, then click **Run browser check**. It uses simulated BLE
 devices with the actual application and AudioWorklet, and verifies shared zero,
@@ -149,3 +153,7 @@ operation. This points to an intermittent assembly connection or power problem;
 real acquisition has not passed verification. BLE status now identifies the failed
 initialization operation and reports GPIO8–12 pin levels. The page rejects the
 invalid pressure word and stops haptics rather than mapping it to full duty.
+After replugging, no mux address acknowledged at either 100 or 400 kHz, even
+after mux reset and with RESET pulled high. The connector still needs checking.
+The browser integration check passed with the invalid word injected while
+haptics were active: the motor stopped and the shared pressure stayed unchanged.
