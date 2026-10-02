@@ -13,6 +13,7 @@ std::atomic<char> request{0};
 std::atomic<bool> subscribed{false};
 std::atomic<uint16_t> mtu{23}, interval{0};
 bool streaming = false, demo = false;
+uint8_t generation = 0;
 uint32_t samples[4]{}, errors[4]{}, full[4]{}, dropped[4]{};
 const char *message = "Ready";
 int64_t nextDemo = 0, demoStart = 0;
@@ -60,10 +61,10 @@ bool configure() {
 void updateStatus() {
   char text[480];
   snprintf(text, sizeof(text),
-      "{\"streaming\":%s,\"demo\":%s,\"message\":\"%s\",\"mtu\":%u,\"interval\":%u,"
+      "{\"generation\":%u,\"streaming\":%s,\"demo\":%s,\"message\":\"%s\",\"mtu\":%u,\"interval\":%u,"
       "\"samples\":[%lu,%lu,%lu,%lu],\"errors\":[%lu,%lu,%lu,%lu],"
       "\"full\":[%lu,%lu,%lu,%lu],\"dropped\":[%lu,%lu,%lu,%lu]}",
-      streaming ? "true" : "false", demo ? "true" : "false", message, mtu.load(), interval.load(),
+      generation, streaming ? "true" : "false", demo ? "true" : "false", message, mtu.load(), interval.load(),
       (unsigned long)samples[0], (unsigned long)samples[1], (unsigned long)samples[2], (unsigned long)samples[3],
       (unsigned long)errors[0], (unsigned long)errors[1], (unsigned long)errors[2], (unsigned long)errors[3],
       (unsigned long)full[0], (unsigned long)full[1], (unsigned long)full[2], (unsigned long)full[3],
@@ -105,7 +106,7 @@ void send(int sensor, uint8_t count, const uint8_t *raw, uint32_t time) {
   for (int first = 0; first < count; first += limit) {
     const uint8_t n = min(int(count) - first, limit);
     uint8_t bytes[64];
-    PressureHeader header{1, uint8_t(sensor), n, uint8_t((demo ? 1 : 0) | (full[sensor] ? 2 : 0)),
+    PressureHeader header{1, uint8_t(sensor), n, uint8_t((generation << 2) | (demo ? 1 : 0) | (full[sensor] ? 2 : 0)),
                           samples[sensor], time, uint16_t(errors[sensor]), uint16_t(dropped[sensor])};
     memcpy(bytes, &header, sizeof(header));
     memcpy(bytes + sizeof(header), raw + first * 3, n * 3);
@@ -151,6 +152,7 @@ void loop() {
     if (!demo) standby();
     demo = command == 'D';
     if (command != 'X') {
+      generation = (generation + 1) & 63;
       memset(samples, 0, sizeof(samples)); memset(errors, 0, sizeof(errors));
       memset(full, 0, sizeof(full)); memset(dropped, 0, sizeof(dropped));
       streaming = subscribed.load() && (demo || configure());

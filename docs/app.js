@@ -2,6 +2,7 @@ import { ids, colors, decodeBatch, Pressures, motorDuty, MotorWriter } from './p
 
 const $ = id => document.getElementById(id);
 const pressures = new Pressures();
+let generation = null;
 let sensorDevice, sensorControl, sensorStatus, sensorCharacteristic;
 let motorDevice, motorControl, writer;
 let audio, noise, soundEnabled = false, hapticEnabled = false, switching = false;
@@ -32,7 +33,7 @@ function motorLost() {
 }
 function sensorLost() {
   stopHaptics(); sensorControl = null; sensorStatus = null; sensorCharacteristic = null; sensorDevice = null;
-  pressures.reset(); output(); $('sensorState').textContent = 'SuperMini · disconnected';
+  generation = null; pressures.reset(); rates.fill(0); rateCounts.fill(0); rateTime = performance.now(); output(); $('sensorState').textContent = 'SuperMini · disconnected';
   $('sensorConnect').textContent = 'Connect pressures';
 }
 
@@ -52,7 +53,9 @@ async function connectSensors() {
     sensorCharacteristic.addEventListener('characteristicvaluechanged', ({ target }) => {
       try {
         const now = performance.now();
-        for (const packet of decodeBatch(target.value)) pressures.ingest(packet, now);
+        for (const packet of decodeBatch(target.value)) {
+          if (packet.generation === generation) pressures.ingest(packet, now);
+        }
         output();
       }
       catch (e) { ++malformed; error(e); stopHaptics(); }
@@ -67,7 +70,7 @@ async function connectSensors() {
 
 async function startStream(command) {
   if (!sensorControl || switching) return;
-  switching = true; stopHaptics(); pressures.reset(); output();
+  switching = true; generation = null; stopHaptics(); pressures.reset(); output();
   rateCounts = [0, 0, 0, 0]; rates = [0, 0, 0, 0]; rateTime = performance.now();
   try {
     await sensorControl.writeValueWithResponse(new TextEncoder().encode(command));
@@ -76,6 +79,7 @@ async function startStream(command) {
     const view = await sensorStatus.readValue();
     const state = JSON.parse(new TextDecoder().decode(view));
     if (!state.streaming) throw Error(state.message);
+    generation = state.generation;
     clearError(); $('sensorState').textContent = `SuperMini · ${state.demo ? 'BLE test stream' : 'sensors running'} · ${(state.interval * 1.25).toFixed(1)} ms interval`;
   } catch (e) { error(e); }
   finally { switching = false; output(); }

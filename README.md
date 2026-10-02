@@ -20,7 +20,8 @@ Keep the XIAO external antenna connected.
 The browser decodes each sample to kPa and subtracts one per-sensor baseline.
 These four signed relative pressures are shared by the plot, sound, and haptics.
 **Zero pressure** snapshots the latest four readings, updates every output, and
-clears plot history. The first complete set of readings establishes an initial
+clears plot history. Switching streams discards packets from the previous stream
+using a firmware generation tag, so queued test data cannot affect real outputs. The first complete set of readings establishes an initial
 baseline automatically; release the sensors at connection time.
 
 There is no averaging, deadband, envelope smoothing, or pressure normalization.
@@ -119,3 +120,23 @@ References: [Web Bluetooth](https://developer.chrome.com/docs/capabilities/bluet
 [NimBLE server API](https://h2zero.github.io/NimBLE-Arduino/class_nim_b_l_e_server.html),
 [Apple connection parameters](https://developer.apple.com/library/archive/qa/qa1931/_index.html),
 [BMP585 datasheet](https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmp585-ds003.pdf).
+
+## Verified October 2, 2026
+
+Both BLE firmwares were flashed and verified on the USB-connected boards. A
+30-second integration check delivered 60,288 synthetic pressure samples at
+499.1 Hz per channel, with zero gaps, errors, FIFO-full events, or firmware drops.
+It sent motor commands at 173.7 Hz and verified endpoint duties, invalid-command
+rejection, watchdog stop, disconnect stop, and reconnection. The maximum time since
+the oldest sensor notification was received was 44.5 ms; this is not a measurement
+of sensor-to-motor latency.
+
+Chrome subsequently ran both real BLE connections at 15 ms intervals, with over
+180,000 test samples and zero reported gaps or faults. Shared zeroing, laptop noise
+playback, haptics, and Stop were exercised together. Audio reported 5.3 ms base plus
+32 ms output latency. Browser fixture checks covered all sound modes, common zero,
+step response, stale input, and rejection of late packets from previous streams.
+
+The mux is still disconnected, so live BMP585 acquisition with this BLE firmware
+and physical motor amplitude have not been measured. Use `ble/check.py --sensors`
+after wiring the mux to verify the actual four sensors.

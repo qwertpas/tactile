@@ -10,7 +10,7 @@ constexpr char MOTOR_CONTROL[] = "89c10012-6b3a-4c2d-a155-7b9865500001";
 constexpr char MOTOR_STATUS[] = "89c10013-6b3a-4c2d-a155-7b9865500001";
 
 struct __attribute__((packed)) PressureHeader {
-  uint8_t version, sensor, count, flags; // flags: 1=test, 2=FIFO full observed.
+  uint8_t version, sensor, count, flags; // flags: bit 0=test, bit 1=FIFO full; bits 2..7=stream generation.
   uint32_t sequence, time; // First sequence; FIFO readout time in microseconds.
   uint16_t errors, dropped;
 };

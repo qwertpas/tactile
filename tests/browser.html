@@ -7,6 +7,7 @@ document.body.append(...page.body.childNodes);
 const note = document.createElement('div'); note.id = 'testResult'; note.style = 'padding:12px;background:#294560;color:white';
 note.textContent = 'BROWSER TEST · simulated Bluetooth devices; real application and audio';
 document.querySelector('main').prepend(note);
+let generation = 0;
 let duty = 0, commands = 0, sequence = 0, streaming = false, counts = [0,0,0,0], wave = false, hold = [0,10,20,30];
 const encode = text => new DataView(new TextEncoder().encode(text).buffer);
 const motorView = () => {
@@ -17,10 +18,18 @@ class Characteristic extends EventTarget {
  constructor(id) { super(); this.id = id; }
  async startNotifications() { return this; }
  async readValue() {
-  return this.id === ids.motorStatus ? motorView() : encode(JSON.stringify({streaming,demo:true,message:'Test stream',interval:12}));
+  return this.id === ids.motorStatus ? motorView() : encode(JSON.stringify({generation,streaming,demo:true,message:'Test stream',interval:12}));
  }
  async writeValueWithResponse(value) {
-  const command = new TextDecoder().decode(value); streaming = command !== 'X'; counts = [0,0,0,0];
+  // Deliver a packet from the previous stream after the new start has completed.
+  const old = new DataView(new ArrayBuffer(76));
+  for (let i=0;i<4;++i) {
+   const o=i*19;old.setUint8(o,1);old.setUint8(o+1,i);old.setUint8(o+2,1);old.setUint8(o+3,1 | generation << 2);
+   old.setUint32(o+4,999999,true);
+   for(let b=0;b<3;++b)old.setUint8(o+16+b,(240*64000)>>(8*b));
+  }
+  setTimeout(()=>chars.get(ids.pressure).emit(old),300);
+  const command = new TextDecoder().decode(value); streaming = command !== 'X'; counts = [0,0,0,0]; ++generation; emitted=0;
  }
  async writeValueWithoutResponse(value) {
   duty = value.getUint16(0,true); sequence = value.getUint32(2,true); ++commands;
@@ -41,9 +50,9 @@ setInterval(() => {
  if (streaming && sensor.gatt.connected) {
   const view = new DataView(new ArrayBuffer(76));
   for (let i=0;i<4;++i) {
-   const o=i*19;view.setUint8(o,1);view.setUint8(o+1,i);view.setUint8(o+2,1);view.setUint8(o+3,1);
+   const o=i*19;view.setUint8(o,1);view.setUint8(o+1,i);view.setUint8(o+2,1);view.setUint8(o+3,1 | generation << 2);
    view.setUint32(o+4,counts[i]++,true); view.setUint32(o+8,performance.now()*1000,true);
-   const p=100+(emitted<4?0:wave?15*(1-Math.cos(performance.now()/400+i)):hold[i]);
+   const p=100+(emitted<130?0:wave?15*(1-Math.cos(performance.now()/400+i)):hold[i]);
    const raw=Math.round(p*64000);for(let b=0;b<3;++b)view.setUint8(o+16+b,raw>>(8*b));
   }
   chars.get(ids.pressure).emit(view);++emitted;
@@ -56,9 +65,10 @@ const assert = (condition,text) => {if(!condition)throw Error(text);};
 const button = document.createElement('button');button.textContent='Run browser check';button.id='runCheck';note.append(button);
 button.onclick=async()=>{
  try {
-  get('sensorConnect').click();await wait(400);get('motorConnect').click();await wait(100);
+  get('sensorConnect').click();await wait(800);get('motorConnect').click();await wait(100);
   assert(!get('zero').disabled,'Zero enabled');
   assert(get('p3').textContent==='30.00 kPa','Shared 30 kPa displayed');
+  assert(get('stats').textContent.includes('0 gaps · 0 faults'),'Old stream packets rejected');
   get('haptic').click();await wait(80);assert(duty===1023,'Highest pressure drives 100%');
   get('sound').click();await wait(300);assert(get('sound').textContent==='Stop sound','Real audio starts');
   for(let mode=0;mode<4;++mode){get('mode').selectedIndex=mode;get('mode').dispatchEvent(new Event('change'));await wait(50);}

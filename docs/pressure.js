@@ -20,7 +20,7 @@ export function decode(view) {
     const offset = 16 + i * 3;
     return (view.getUint8(offset) | view.getUint8(offset + 1) << 8 | view.getUint8(offset + 2) << 16) / 64000;
   });
-  return { sensor, count, flags, sequence: view.getUint32(4, true), time: view.getUint32(8, true),
+  return { sensor, count, flags, generation: flags >> 2, sequence: view.getUint32(4, true), time: view.getUint32(8, true),
     errors: view.getUint16(12, true), dropped: view.getUint16(14, true), values };
 }
 
