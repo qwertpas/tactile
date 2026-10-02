@@ -1,0 +1,75 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Tactile browser check</title><link rel="stylesheet" href="../docs/style.css"></head><body>
+<script type="module">
+import { ids } from '../docs/pressure.js';
+const page = new DOMParser().parseFromString(await (await fetch('../docs/index.html')).text(), 'text/html');
+page.querySelector('script').remove();
+document.body.append(...page.body.childNodes);
+const note = document.createElement('div'); note.id = 'testResult'; note.style = 'padding:12px;background:#294560;color:white';
+note.textContent = 'BROWSER TEST · simulated Bluetooth devices; real application and audio';
+document.querySelector('main').prepend(note);
+let duty = 0, commands = 0, sequence = 0, streaming = false, counts = [0,0,0,0], wave = false, hold = [0,10,20,30];
+const encode = text => new DataView(new TextEncoder().encode(text).buffer);
+const motorView = () => {
+ const view = new DataView(new ArrayBuffer(16));
+ view.setUint32(0,sequence,true); view.setUint32(8,commands,true); view.setUint16(12,duty,true); view.setUint16(14,12,true); return view;
+};
+class Characteristic extends EventTarget {
+ constructor(id) { super(); this.id = id; }
+ async startNotifications() { return this; }
+ async readValue() {
+  return this.id === ids.motorStatus ? motorView() : encode(JSON.stringify({streaming,demo:true,message:'Test stream',interval:12}));
+ }
+ async writeValueWithResponse(value) {
+  const command = new TextDecoder().decode(value); streaming = command !== 'X'; counts = [0,0,0,0];
+ }
+ async writeValueWithoutResponse(value) {
+  duty = value.getUint16(0,true); sequence = value.getUint32(2,true); ++commands;
+ }
+ emit(value) { this.value = value; this.dispatchEvent(new Event('characteristicvaluechanged')); }
+}
+const chars = new Map(Object.values(ids).map(id => [id,new Characteristic(id)]));
+class Device extends EventTarget {
+ constructor() { super(); this.gatt = {connected:false,
+  connect:async () => {this.gatt.connected=true;return {getPrimaryService:async () => ({getCharacteristic:async id => chars.get(id)})};},
+  disconnect:() => {this.gatt.connected=false;this.dispatchEvent(new Event('gattserverdisconnected'));}}; }
+}
+const sensor = new Device(), motor = new Device();
+Object.defineProperty(navigator,'bluetooth',{value:{requestDevice:async options => options.filters[0].services[0] === ids.sensor ? sensor : motor}});
+await import('../docs/app.js');
+let emitted = 0;
+setInterval(() => {
+ if (streaming && sensor.gatt.connected) {
+  const view = new DataView(new ArrayBuffer(76));
+  for (let i=0;i<4;++i) {
+   const o=i*19;view.setUint8(o,1);view.setUint8(o+1,i);view.setUint8(o+2,1);view.setUint8(o+3,1);
+   view.setUint32(o+4,counts[i]++,true); view.setUint32(o+8,performance.now()*1000,true);
+   const p=100+(emitted<4?0:wave?15*(1-Math.cos(performance.now()/400+i)):hold[i]);
+   const raw=Math.round(p*64000);for(let b=0;b<3;++b)view.setUint8(o+16+b,raw>>(8*b));
+  }
+  chars.get(ids.pressure).emit(view);++emitted;
+ }
+ chars.get(ids.motorStatus).emit(motorView());
+},2);
+const get = id => document.getElementById(id);
+const wait = ms => new Promise(resolve=>setTimeout(resolve,ms));
+const assert = (condition,text) => {if(!condition)throw Error(text);};
+const button = document.createElement('button');button.textContent='Run browser check';button.id='runCheck';note.append(button);
+button.onclick=async()=>{
+ try {
+  get('sensorConnect').click();await wait(400);get('motorConnect').click();await wait(100);
+  assert(!get('zero').disabled,'Zero enabled');
+  assert(get('p3').textContent==='30.00 kPa','Shared 30 kPa displayed');
+  get('haptic').click();await wait(80);assert(duty===1023,'Highest pressure drives 100%');
+  get('sound').click();await wait(300);assert(get('sound').textContent==='Stop sound','Real audio starts');
+  for(let mode=0;mode<4;++mode){get('mode').selectedIndex=mode;get('mode').dispatchEvent(new Event('change'));await wait(50);}
+  get('zero').click();await wait(50);
+  assert([...Array(4)].every((_,i)=>get(`p${i}`).textContent==='0.00 kPa'),'Zero shared pressures');
+  assert(duty===205,'Zero motor maps to 20%');
+  hold=[5,5,5,5];await wait(50);assert(get('p0').textContent==='5.00 kPa','Immediate pressure step after zero');
+  get('haptic').click();await wait(50);assert(duty===0,'Stop immediate');
+  get('sound').click();streaming=false;await wait(150);assert(get('haptic').disabled,'Stale pressure disables haptics');
+  get('restart').click();await wait(300);wave=true;
+  note.firstChild.textContent='PASS · shared zero / max-pressure PWM / all four audio modes / stop / stale input. Simulated BLE devices.';
+ } catch(e) {note.firstChild.textContent='FAIL: '+e.message;throw e;}
+};
+</script></body></html>

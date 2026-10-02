@@ -1,0 +1,6 @@
+numpy>=1.26
+pyserial>=3.5
+pyqtgraph>=0.13.7
+PyQt6>=6.6
+sounddevice>=0.5
+scipy>=1.11
