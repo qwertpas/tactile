@@ -78,7 +78,10 @@ async function startStream(command) {
     await new Promise(resolve => setTimeout(resolve, 200));
     const view = await sensorStatus.readValue();
     const state = JSON.parse(new TextDecoder().decode(view));
-    if (!state.streaming) throw Error(state.message);
+    if (!state.streaming) {
+      $('sensorState').textContent = 'SuperMini · sensors stopped';
+      throw Error(state.message);
+    }
     generation = state.generation;
     clearError(); $('sensorState').textContent = `SuperMini · ${state.demo ? 'BLE test stream' : 'sensors running'} · ${(state.interval * 1.25).toFixed(1)} ms interval`;
   } catch (e) { error(e); }
