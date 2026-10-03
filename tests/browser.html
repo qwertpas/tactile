@@ -68,14 +68,20 @@ button.onclick=async()=>{
   get('sensorConnect').click();await wait(800);get('motorConnect').click();await wait(100);
   assert(!get('zero').disabled,'Zero enabled');
   assert(get('p3').textContent==='30.00 kPa','Shared 30 kPa displayed');
+  const heatColors=()=>[...Array(4)].map((_,i)=>get(`p${i}`).parentElement.style.backgroundColor);
+  assert(get('heatState').textContent==='Live','Heatmap receives live shared pressures');
+  assert(new Set(heatColors()).size===4,'Four pressure levels have distinct heatmap colors');
   assert(get('stats').textContent.includes('0 gaps · 0 faults'),'Old stream packets rejected');
   get('haptic').click();await wait(80);assert(duty===1023,'Highest pressure drives 100%');
   get('sound').click();await wait(300);assert(get('sound').textContent==='Stop sound','Real audio starts');
-  for(let mode=0;mode<4;++mode){get('mode').selectedIndex=mode;get('mode').dispatchEvent(new Event('change'));await wait(50);}
+  for(let mode=0;mode<4;++mode){get('mode').selectedIndex=mode;get('mode').dispatchEvent(new Event('change'));await wait(50);if(mode===1)assert(get('soundInfo').textContent.includes('voiced vowels'),'Vowels use voiced speech');}
   get('zero').click();await wait(50);
   assert([...Array(4)].every((_,i)=>get(`p${i}`).textContent==='0.00 kPa'),'Zero shared pressures');
   assert(duty===205,'Zero motor maps to 20%');
-  hold=[5,5,5,5];await wait(50);assert(get('p0').textContent==='5.00 kPa','Immediate pressure step after zero');
+  assert(new Set(heatColors()).size===1,'Zero resets every heatmap cell');
+  const zeroColor=heatColors()[0];
+  hold=[5,15,25,35];await wait(50);assert(get('p0').textContent==='5.00 kPa','Immediate pressure step after zero');
+  assert(new Set(heatColors()).size===1&&heatColors()[0]!==zeroColor,'Heatmap responds to the same unsmoothed step');
   const bad=new DataView(new ArrayBuffer(19));bad.setUint8(0,1);bad.setUint8(2,1);bad.setUint8(3,1 | generation << 2);
   bad.setUint32(4,counts[0],true);for(let i=16;i<19;++i)bad.setUint8(i,255);
   chars.get(ids.pressure).emit(bad);await wait(50);
@@ -85,8 +91,9 @@ button.onclick=async()=>{
   get('haptic').click();await wait(50);
   get('haptic').click();await wait(50);assert(duty===0,'Stop immediate');
   get('sound').click();streaming=false;await wait(150);assert(get('haptic').disabled,'Stale pressure disables haptics');
+  assert(get('heatState').textContent==='Stale','Heatmap marks stale data');
   get('restart').click();await wait(300);wave=true;
-  note.firstChild.textContent='PASS · shared zero / max-pressure PWM / all four audio modes / invalid sensor word / stop / stale input. Simulated BLE devices.';
+  note.firstChild.textContent='PASS · shared zero / heatmap / voiced vowels / max-pressure PWM / all audio modes / invalid sensor word / stop / stale input. Simulated BLE devices.';
  } catch(e) {note.firstChild.textContent='FAIL: '+e.message;throw e;}
 };
 </script></body></html>

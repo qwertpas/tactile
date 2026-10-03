@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#10151d">
-  <title>Tactile</title><link rel="stylesheet" href="style.css">
+  <title>Tactile</title><link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 <main>
@@ -19,13 +19,19 @@
     <button id="demo" disabled>Start BLE test stream</button>
     <span id="baseline">Release sensors before zeroing.</span>
   </section>
-  <section class="readings" aria-label="Relative pressures">
-    <article><span>CH2 / 0x46</span><strong id="p0">—</strong><small id="rate0">— Hz</small></article>
-    <article><span>CH2 / 0x47</span><strong id="p1">—</strong><small id="rate1">— Hz</small></article>
-    <article><span>CH6 / 0x46</span><strong id="p2">—</strong><small id="rate2">— Hz</small></article>
-    <article><span>CH6 / 0x47</span><strong id="p3">—</strong><small id="rate3">— Hz</small></article>
+  <section class="visuals" aria-label="Pressure display">
+    <div class="heatmap">
+      <h2>Pressure heatmap <small id="heatState">Waiting for data</small></h2>
+      <section class="readings" aria-label="Pressure heatmap: CH2 top row, CH6 bottom row; 0x46 left, 0x47 right">
+        <article><span>CH2 / 0x46</span><strong id="p0">—</strong><small id="rate0">— Hz</small></article>
+        <article><span>CH2 / 0x47</span><strong id="p1">—</strong><small id="rate1">— Hz</small></article>
+        <article><span>CH6 / 0x46</span><strong id="p2">—</strong><small id="rate2">— Hz</small></article>
+        <article><span>CH6 / 0x47</span><strong id="p3">—</strong><small id="rate3">— Hz</small></article>
+      </section>
+      <div class="heatScale" aria-label="Heatmap color scale from 0 to 30 kilopascals"><span>0 kPa</span><span>30 kPa</span></div>
+    </div>
+    <section class="chart"><canvas id="plot" aria-label="Four relative pressure traces over ten seconds, in kPa"></canvas></section>
   </section>
-  <section class="chart"><canvas id="plot" aria-label="Four relative pressure traces over ten seconds, in kPa"></canvas></section>
   <section class="outputs" aria-label="Sound and haptic feedback">
     <div class="sound">
       <div class="row"><button id="sound" disabled>Start sound</button><label>Mapping <select id="mode"><option>Bands</option><option>Vowels</option><option>Pulses</option><option>Stereo</option></select></label></div>
@@ -41,6 +47,6 @@
   </section>
   <footer><span id="stats">No samples</span><span>Chrome or Edge · Bluetooth · USB power only</span></footer>
 </main>
-<script type="module" src="app.js"></script>
+<script type="module" src="app.js?v=2"></script>
 </body>
 </html>

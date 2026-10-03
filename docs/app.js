@@ -1,11 +1,11 @@
-import { ids, colors, decodeBatch, Pressures, motorDuty, MotorWriter } from './pressure.js';
+import { ids, colors, scale, decodeBatch, Pressures, motorDuty, MotorWriter } from './pressure.js';
 
 const $ = id => document.getElementById(id);
 const pressures = new Pressures();
 let generation = null;
 let sensorDevice, sensorControl, sensorStatus, sensorCharacteristic;
 let motorDevice, motorControl, writer;
-let audio, noise, soundEnabled = false, hapticEnabled = false, switching = false;
+let audio, player, soundEnabled = false, hapticEnabled = false, switching = false;
 let malformed = 0, motorDutyValue = 0, motorCommands = 0, motorInterval = 0;
 let rateTime = performance.now(), rateCounts = [0, 0, 0, 0], rates = [0, 0, 0, 0];
 let sensorBusy = false, motorBusy = false;
@@ -18,7 +18,7 @@ function supported() {
 function fresh() { return !switching && pressures.fresh(performance.now()) && !document.hidden; }
 function output() {
   const valid = fresh();
-  if (noise) noise.port.postMessage(valid ? { pressures: [...pressures.values] } : { stale: true });
+  if (player) player.port.postMessage(valid ? { pressures: [...pressures.values] } : { stale: true });
   if (hapticEnabled && writer) writer.set(valid ? motorDuty(pressures.values) : 0);
 }
 function stopHaptics() {
@@ -121,23 +121,23 @@ async function toggleSound() {
   try {
     if (!audio) {
       audio = new AudioContext({ latencyHint: 'interactive', sampleRate: 48000 });
-      await audio.audioWorklet.addModule(new URL('./audio.js', import.meta.url));
-      noise = new AudioWorkletNode(audio, 'pressure-noise', { outputChannelCount: [2] });
-      noise.connect(audio.destination);
+      await audio.audioWorklet.addModule(new URL('./audio.js?v=2', import.meta.url));
+      player = new AudioWorkletNode(audio, 'pressure-audio', { outputChannelCount: [2] });
+      player.connect(audio.destination);
       controls();
     }
     await audio.resume(); soundEnabled = !soundEnabled;
-    noise.port.postMessage({ enabled: soundEnabled }); output();
+    player.port.postMessage({ enabled: soundEnabled }); output();
     $('sound').textContent = soundEnabled ? 'Stop sound' : 'Start sound';
     $('sound').classList.toggle('active', soundEnabled);
   } catch (e) { error(e); }
 }
 function controls() {
   $('volumeValue').textContent = `${$('volume').value}%`;
-  noise?.port.postMessage({ volume: Number($('volume').value) / 100, mode: $('mode').selectedIndex });
+  player?.port.postMessage({ volume: Number($('volume').value) / 100, mode: $('mode').selectedIndex });
   $('soundInfo').textContent = [
     'Four noise pitches: 220, 660, 1980, 5940 Hz. Each pressure controls its voice.',
-    'Four noise vowels: ah, ee, oh, oo. Each pressure controls its vowel.',
+    'Four voiced vowels: ah, ee, oh, oo. Each pressure controls its vowel’s volume.',
     'Four rhythms: 2, 3, 5, 7 pulses/second. Each pressure controls its rhythm.',
     'Low left, low right, high left, high right. Each pressure controls its position.',
   ][$('mode').selectedIndex];
@@ -161,7 +161,7 @@ window.addEventListener('pagehide', () => { stopHaptics(); sensorDevice?.gatt.di
 setInterval(() => {
   if (hapticEnabled && !fresh()) { stopHaptics(); }
   else if (hapticEnabled) output(); // Refresh the firmware watchdog when pressure is unchanged.
-  if (!fresh()) noise?.port.postMessage({ stale: true });
+  if (!fresh()) player?.port.postMessage({ stale: true });
 }, 50);
 
 function draw(now) {
@@ -213,7 +213,10 @@ function render(now) {
   for (let i = 0; i < 4; ++i) {
     $(`p${i}`).textContent = pressures.zeroed ? `${pressures.values[i].toFixed(2)} kPa` : '—';
     $(`rate${i}`).textContent = `${rates[i].toFixed(0)} Hz`;
+    const level = scale(pressures.values[i]);
+    $(`p${i}`).parentElement.style.backgroundColor = valid ? `hsl(${220 * (1 - level)} 70% ${20 + 22 * level}%)` : '#18212d';
   }
+  $('heatState').textContent = valid ? 'Live' : pressures.zeroed ? 'Stale' : 'Waiting for data';
   $('streamState').textContent = pressures.demo ? (valid ? 'BLE TEST STREAM' : 'TEST STREAM · stale') : (valid ? 'Live pressures' : (sensorControl ? 'Waiting for pressures' : 'Disconnected'));
   $('baseline').textContent = pressures.zeroed ? `Zero: ${pressures.baseline.map(p => p.toFixed(2)).join(' / ')} kPa absolute` : 'Release sensors before zeroing.';
   $('duty').textContent = `${(motorDutyValue / 1023 * 100).toFixed(1)}%`;

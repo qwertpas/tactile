@@ -33,7 +33,7 @@ function render(processor, blocks = 100) {
   return { energy, max };
 }
 
-test('one zeroed snapshot controls history, noise gains and highest-pressure motor; step has no smoothing', () => {
+test('one zeroed snapshot controls history, audio gains and highest-pressure motor; step has no smoothing', () => {
   const state = new Pressures();
   for (let i = 0; i < 4; ++i) state.ingest(packet(i, [100 + i]), 0);
   assert.deepEqual(state.values, [0, 0, 0, 0]);
@@ -65,6 +65,31 @@ test('all sound modes render bounded audio; stale input silences the next block'
     const audio = render(processor);
     assert.ok(audio.energy.every(e => e > 0)); assert.ok(audio.max <= 0.35);
     processor.port.onmessage({ data: { stale: true } });
+    assert.deepEqual(render(processor, 1).energy, [0, 0]);
+  }
+});
+
+test('each vowel has a voiced pitch; zero pressure and stop silence the next audio block', () => {
+  for (let voice = 0; voice < 4; ++voice) {
+    const processor = new Processor();
+    const pressures = [0, 0, 0, 0]; pressures[voice] = 30;
+    processor.port.onmessage({ data: { pressures, enabled: true, mode: 1, volume: 1 } });
+    render(processor); // Let the vocal-tract filters reach steady state.
+    const output = [[new Float32Array(128), new Float32Array(128)]], samples = [];
+    for (let block = 0; block < 40; ++block) {
+      processor.process([], output); samples.push(...output[0][0]);
+    }
+    const lag = Math.round(48000 / (120 + voice * 15));
+    let correlation = 0, energy = 0, shifted = 0;
+    for (let i = lag; i < samples.length; ++i) {
+      correlation += samples[i] * samples[i - lag];
+      energy += samples[i] ** 2; shifted += samples[i - lag] ** 2;
+    }
+    assert.ok(energy > 0.01);
+    assert.ok(correlation / Math.sqrt(energy * shifted) > 0.95, `Vowel ${voice} has a periodic voice`);
+    processor.port.onmessage({ data: { pressures: [0, 0, 0, 0] } });
+    assert.deepEqual(render(processor, 1).energy, [0, 0]);
+    processor.port.onmessage({ data: { pressures, enabled: false } });
     assert.deepEqual(render(processor, 1).energy, [0, 0]);
   }
 });

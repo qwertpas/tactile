@@ -18,7 +18,7 @@ Keep the XIAO external antenna connected.
 ## Pressure and outputs
 
 The browser decodes each sample to kPa and subtracts one per-sensor baseline.
-These four signed relative pressures are shared by the plot, sound, and haptics.
+These four signed relative pressures are shared by the heatmap, plot, sound, and haptics.
 **Zero pressure** snapshots the latest four readings, updates every output, and
 clears plot history. Switching streams discards packets from the previous stream
 using a firmware generation tag, so queued test data cannot affect real outputs. The first complete set of readings establishes an initial
@@ -29,8 +29,11 @@ Every received sample enters the plot history. Sound and haptics use the latest
 four values from that same processed stream, independent of animation timing.
 
 - **Plot:** four pressure traces, ten seconds of history, refreshed at display rate.
-- **Sound:** independent white-noise voices, linear gain from 0 to 30 kPa. Bands,
-  Vowels, Pulses, and Stereo retain the mappings from the original Python interface.
+- **Heatmap:** CH2 on the top row, CH6 below; 0x46 left and 0x47 right. Color maps
+  directly from 0–30 kPa, without spatial interpolation or pressure smoothing.
+- **Sound:** four voices, linear gain from 0 to 30 kPa. Vowels uses voiced
+  ah/ee/oh/oo with vocal-fold pulses and [speech formants](https://csound.com/manual/misc/formants/).
+  Bands, Pulses, and Stereo use filtered noise.
   Web Audio runs 128-frame blocks with an interactive latency request. Audio-device
   buffering adds latency; the browser displays its reported base and output latency.
 - **Haptics:** the highest of the four relative pressures maps linearly from
