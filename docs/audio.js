@@ -30,6 +30,7 @@ class PressureAudio extends AudioWorkletProcessor {
     const fresh = this.enabled && currentTime - this.stamp < 0.1;
     const gains = this.pressures.map(p => fresh ? Math.max(0, Math.min(1, p / 30)) * this.volume : 0);
     const voices = this.filters[this.mode];
+    const linear = this.mode === 1 || this.mode === 4;
     for (let sample = 0; sample < left.length; ++sample) {
       let l = 0, r = 0;
       for (let voice = 0; voice < 4; ++voice) {
@@ -38,6 +39,8 @@ class PressureAudio extends AudioWorkletProcessor {
           const clip = this.vowels[voice];
           value = clip[this.positions[voice]] * 1.5;
           this.positions[voice] = (this.positions[voice] + 1) % clip.length;
+        } else if (this.mode === 4) {
+          value = Math.sin(2 * Math.PI * [220, 660, 1980, 5940][voice] * this.sample / sampleRate);
         } else {
           const noise = (Math.random() * 2 - 1) * Math.sqrt(3);
           for (const f of voices[voice]) {
@@ -51,8 +54,8 @@ class PressureAudio extends AudioWorkletProcessor {
         if (this.mode === 3) { if (voice % 2) r += value; else l += value; }
         else { l += value * Math.SQRT1_2; r += value * Math.SQRT1_2; }
       }
-      left[sample] = this.mode === 1 ? 0.25 * l : 0.35 * Math.tanh(l);
-      right[sample] = this.mode === 1 ? 0.25 * r : 0.35 * Math.tanh(r);
+      left[sample] = linear ? 0.25 * l : 0.35 * Math.tanh(l);
+      right[sample] = linear ? 0.25 * r : 0.35 * Math.tanh(r);
       ++this.sample;
     }
     return true;

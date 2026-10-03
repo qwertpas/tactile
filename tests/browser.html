@@ -74,7 +74,7 @@ button.onclick=async()=>{
   assert(get('stats').textContent.includes('0 gaps · 0 faults'),'Old stream packets rejected');
   get('haptic').click();await wait(80);assert(duty===1023,'Highest pressure drives 100%');
   get('sound').click();await wait(300);assert(get('sound').textContent==='Stop sound','Real audio starts');
-  for(let mode=0;mode<4;++mode){get('mode').selectedIndex=mode;get('mode').dispatchEvent(new Event('change'));await wait(50);if(mode===1)assert(get('soundInfo').textContent.includes('recorded human vowels'),'Vowels use human recordings');}
+  for(let mode=0;mode<5;++mode){get('mode').selectedIndex=mode;get('mode').dispatchEvent(new Event('change'));await wait(50);if(mode===1)assert(get('soundInfo').textContent.includes('continuous vowels'),'Vowels sustain continuously');if(mode===4)assert(get('soundInfo').textContent.includes('pure sine tones'),'Pure tones mapping available');}
   get('zero').click();await wait(50);
   assert([...Array(4)].every((_,i)=>get(`p${i}`).textContent==='0.00 kPa'),'Zero shared pressures');
   assert(duty===205,'Zero motor maps to 20%');
@@ -93,7 +93,7 @@ button.onclick=async()=>{
   get('sound').click();streaming=false;await wait(150);assert(get('haptic').disabled,'Stale pressure disables haptics');
   assert(get('heatState').textContent==='Stale','Heatmap marks stale data');
   get('restart').click();await wait(300);wave=true;
-  note.firstChild.textContent='PASS · shared zero / heatmap / recorded human vowels / max-pressure PWM / all audio modes / invalid sensor word / stop / stale input. Simulated BLE devices.';
+  note.firstChild.textContent='PASS · shared zero / heatmap / continuous vowels / pure tones / max-pressure PWM / all audio modes / invalid sensor word / stop / stale input. Simulated BLE devices.';
  } catch(e) {note.firstChild.textContent='FAIL: '+e.message;throw e;}
 };
 </script></body></html>

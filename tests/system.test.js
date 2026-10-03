@@ -68,17 +68,17 @@ test('one zeroed snapshot controls history, audio gains and highest-pressure mot
 });
 
 test('all sound modes render bounded audio; stale input silences the next block', () => {
-  for (let mode = 0; mode < 4; ++mode) {
+  for (let mode = 0; mode < 5; ++mode) {
     const processor = new Processor(audioOptions);
     processor.port.onmessage({ data: { pressures: [30, 30, 30, 30], enabled: true, mode, volume: 1 } });
     const audio = render(processor);
-    assert.ok(audio.energy.every(e => e > 0)); assert.ok(audio.max <= (mode === 1 ? 0.96 : 0.35));
+    assert.ok(audio.energy.every(e => e > 0)); assert.ok(audio.max <= (mode === 1 ? 0.96 : mode === 4 ? 0.71 : 0.35));
     processor.port.onmessage({ data: { stale: true } });
     assert.deepEqual(render(processor, 1).energy, [0, 0]);
   }
 });
 
-test('vowels preserve the human recording waveform; zero pressure and stop silence the next audio block', () => {
+test('vowels preserve the sustained waveform; zero pressure and stop silence the next audio block', () => {
   for (let voice = 0; voice < 4; ++voice) {
     const processor = new Processor(audioOptions);
     const pressures = [0, 0, 0, 0]; pressures[voice] = 30;
@@ -100,12 +100,50 @@ test('vowels preserve the human recording waveform; zero pressure and stop silen
       assert.ok(energy > 0.01);
       best = Math.max(best, correlation / Math.sqrt(energy * shifted));
     }
-    assert.ok(best > 0.999, `Vowel ${voice} retains the human waveform without distortion`);
+    assert.ok(best > 0.999, `Vowel ${voice} retains the sustained waveform without distortion`);
     processor.port.onmessage({ data: { pressures: [0, 0, 0, 0] } });
     assert.deepEqual(render(processor, 1).energy, [0, 0]);
     processor.port.onmessage({ data: { pressures, enabled: false } });
     assert.deepEqual(render(processor, 1).energy, [0, 0]);
   }
+});
+
+test('vowels sustain for three seconds without gaps or a repeating syllable envelope', () => {
+  for (let voice = 0; voice < 4; ++voice) {
+    const processor = new Processor(audioOptions), pressures = [0, 0, 0, 0]; pressures[voice] = 30;
+    const output = [[new Float32Array(128), new Float32Array(128)]], samples = [];
+    for (let block = 0; block < 1200; ++block) {
+      audioContext.currentTime = block * 128 / 48000;
+      processor.port.onmessage({ data: { pressures, enabled: true, mode: 1, volume: 1 } });
+      processor.process([], output); samples.push(...output[0][0]);
+    }
+    const energy = [];
+    for (let start = 0; start + 2400 <= samples.length; start += 2400)
+      energy.push(samples.slice(start, start + 2400).reduce((sum, value) => sum + value * value, 0) / 2400);
+    assert.ok(Math.min(...energy) > 0.002, `Vowel ${voice} has no silent windows`);
+    assert.ok(Math.max(...energy) / Math.min(...energy) < 1.15, `Vowel ${voice} has steady loudness`);
+  }
+  audioContext.currentTime = 0;
+});
+
+test('pure tones are phase-continuous sine waves, with immediate linear pressure gain and no added harmonics', () => {
+  for (let voice = 0; voice < 4; ++voice) {
+    const processor = new Processor(audioOptions), output = [[new Float32Array(128), new Float32Array(128)]];
+    for (let block = 0; block < 1200; ++block) {
+      const pressure = block < 400 ? 30 : block < 800 ? 15 : 0;
+      const pressures = [0, 0, 0, 0]; pressures[voice] = pressure;
+      audioContext.currentTime = block * 128 / 48000;
+      processor.port.onmessage({ data: { pressures, enabled: true, mode: 4, volume: 1 } });
+      processor.process([], output);
+      for (let i = 0; i < 128; ++i) {
+        const expected = Math.sin(2 * Math.PI * [220, 660, 1980, 5940][voice] * (block * 128 + i) / 48000)
+          * pressure / 30 * Math.SQRT1_2 * 0.25;
+        assert.ok(Math.abs(output[0][0][i] - expected) < 1e-8);
+        assert.equal(output[0][1][i], output[0][0][i]);
+      }
+    }
+  }
+  audioContext.currentTime = 0;
 });
 
 test('BLE writer sends newest pressure and immediate stop after an in-flight write, without a backlog', async () => {
