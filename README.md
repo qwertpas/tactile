@@ -31,8 +31,8 @@ four values from that same processed stream, independent of animation timing.
 - **Plot:** four pressure traces, ten seconds of history, refreshed at display rate.
 - **Heatmap:** CH2 on the top row, CH6 below; 0x46 left and 0x47 right. Color maps
   directly from 0–30 kPa, without spatial interpolation or pressure smoothing.
-- **Sound:** four voices, linear gain from 0 to 30 kPa. Vowels uses voiced
-  ah/ee/oh/oo with vocal-fold pulses and [speech formants](https://csound.com/manual/misc/formants/).
+- **Sound:** four voices, linear gain from 0 to 30 kPa. Vowels loops recordings
+  of a human saying ah/ee/oh/oo; [recordings and credits](docs/vowels/index.html).
   Bands, Pulses, and Stereo use filtered noise.
   Web Audio runs 128-frame blocks with an interactive latency request. Audio-device
   buffering adds latency; the browser displays its reported base and output latency.

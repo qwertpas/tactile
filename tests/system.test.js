@@ -16,6 +16,15 @@ function packet(sensor, values, sequence = 0) {
 }
 
 let Processor;
+const recordings = ['ah', 'ee', 'oh', 'oo'].map(name => {
+  const wav = fs.readFileSync(new URL(`../docs/vowels/${name}.wav`, import.meta.url));
+  assert.equal(wav.readUInt32LE(24), 48000);
+  assert.equal(wav.readUInt16LE(22), 1);
+  assert.equal(wav.readUInt16LE(34), 16);
+  assert.equal(wav.toString('ascii', 36, 40), 'data');
+  return Float32Array.from({ length: (wav.length - 44) / 2 }, (_, i) => wav.readInt16LE(44 + i * 2) / 32768);
+});
+const audioOptions = { processorOptions: { vowels: recordings } };
 const audioContext = { AudioWorkletProcessor: class { constructor() { this.port = {}; } },
   registerProcessor: (_, cls) => { Processor = cls; }, sampleRate: 48000, currentTime: 0 };
 vm.runInNewContext(fs.readFileSync(new URL('../docs/audio.js', import.meta.url), 'utf8'), audioContext);
@@ -42,7 +51,7 @@ test('one zeroed snapshot controls history, audio gains and highest-pressure mot
   assert.deepEqual(state.values, [0, 0, 30, 0]);
   assert.equal(state.history[2].at(-1)[1], state.values[2]);
   assert.equal(motorDuty(state.values), 1023);
-  const processor = new Processor();
+  const processor = new Processor(audioOptions);
   processor.port.onmessage({ data: { pressures: [...state.values], enabled: true, mode: 3 } });
   let sound = render(processor);
   assert.ok(sound.energy[0] > 0.1); assert.equal(sound.energy[1], 0);
@@ -60,33 +69,38 @@ test('one zeroed snapshot controls history, audio gains and highest-pressure mot
 
 test('all sound modes render bounded audio; stale input silences the next block', () => {
   for (let mode = 0; mode < 4; ++mode) {
-    const processor = new Processor();
+    const processor = new Processor(audioOptions);
     processor.port.onmessage({ data: { pressures: [30, 30, 30, 30], enabled: true, mode, volume: 1 } });
     const audio = render(processor);
-    assert.ok(audio.energy.every(e => e > 0)); assert.ok(audio.max <= 0.35);
+    assert.ok(audio.energy.every(e => e > 0)); assert.ok(audio.max <= (mode === 1 ? 0.96 : 0.35));
     processor.port.onmessage({ data: { stale: true } });
     assert.deepEqual(render(processor, 1).energy, [0, 0]);
   }
 });
 
-test('each vowel has a voiced pitch; zero pressure and stop silence the next audio block', () => {
+test('vowels preserve the human recording waveform; zero pressure and stop silence the next audio block', () => {
   for (let voice = 0; voice < 4; ++voice) {
-    const processor = new Processor();
+    const processor = new Processor(audioOptions);
     const pressures = [0, 0, 0, 0]; pressures[voice] = 30;
-    processor.port.onmessage({ data: { pressures, enabled: true, mode: 1, volume: 1 } });
-    render(processor); // Let the vocal-tract filters reach steady state.
+    processor.port.onmessage({ data: { pressures, enabled: true, mode: 1, volume: 0.25 } });
+    render(processor);
     const output = [[new Float32Array(128), new Float32Array(128)]], samples = [];
     for (let block = 0; block < 40; ++block) {
       processor.process([], output); samples.push(...output[0][0]);
     }
-    const lag = Math.round(48000 / (120 + voice * 15));
-    let correlation = 0, energy = 0, shifted = 0;
-    for (let i = lag; i < samples.length; ++i) {
-      correlation += samples[i] * samples[i - lag];
-      energy += samples[i] ** 2; shifted += samples[i - lag] ** 2;
+    let best = 0;
+    const recording = recordings[voice];
+    for (let offset = 0; offset < recording.length; offset += 128) {
+      let correlation = 0, energy = 0, shifted = 0;
+      for (let i = 0; i < samples.length; ++i) {
+        const reference = recording[(offset + i) % recording.length];
+        correlation += samples[i] * reference;
+        energy += samples[i] ** 2; shifted += reference ** 2;
+      }
+      assert.ok(energy > 0.01);
+      best = Math.max(best, correlation / Math.sqrt(energy * shifted));
     }
-    assert.ok(energy > 0.01);
-    assert.ok(correlation / Math.sqrt(energy * shifted) > 0.95, `Vowel ${voice} has a periodic voice`);
+    assert.ok(best > 0.999, `Vowel ${voice} retains the human waveform without distortion`);
     processor.port.onmessage({ data: { pressures: [0, 0, 0, 0] } });
     assert.deepEqual(render(processor, 1).energy, [0, 0]);
     processor.port.onmessage({ data: { pressures, enabled: false } });

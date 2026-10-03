@@ -121,8 +121,14 @@ async function toggleSound() {
   try {
     if (!audio) {
       audio = new AudioContext({ latencyHint: 'interactive', sampleRate: 48000 });
-      await audio.audioWorklet.addModule(new URL('./audio.js?v=2', import.meta.url));
-      player = new AudioWorkletNode(audio, 'pressure-audio', { outputChannelCount: [2] });
+      await audio.audioWorklet.addModule(new URL('./audio.js?v=3', import.meta.url));
+      const vowels = await Promise.all(['ah', 'ee', 'oh', 'oo'].map(async vowel => {
+        const response = await fetch(new URL(`./vowels/${vowel}.wav`, import.meta.url));
+        if (!response.ok) throw Error(`Could not load the ${vowel} recording.`);
+        const buffer = await audio.decodeAudioData(await response.arrayBuffer());
+        return buffer.getChannelData(0);
+      }));
+      player = new AudioWorkletNode(audio, 'pressure-audio', { outputChannelCount: [2], processorOptions: { vowels } });
       player.connect(audio.destination);
       controls();
     }
@@ -137,7 +143,7 @@ function controls() {
   player?.port.postMessage({ volume: Number($('volume').value) / 100, mode: $('mode').selectedIndex });
   $('soundInfo').textContent = [
     'Four noise pitches: 220, 660, 1980, 5940 Hz. Each pressure controls its voice.',
-    'Four voiced vowels: ah, ee, oh, oo. Each pressure controls its vowel’s volume.',
+    'Four recorded human vowels: ah, ee, oh, oo. Each pressure controls its vowel’s volume.',
     'Four rhythms: 2, 3, 5, 7 pulses/second. Each pressure controls its rhythm.',
     'Low left, low right, high left, high right. Each pressure controls its position.',
   ][$('mode').selectedIndex];
