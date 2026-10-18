@@ -2,7 +2,7 @@
 
 # Tactile
 
-[Open Tactile](https://qwertpas.github.io/tactile/) in desktop Chrome or Edge with Bluetooth enabled.
+[Open Tactile](https://qwertpas.github.io/tactile/) in your browser with Bluetooth enabled.
 
 View pressure readings and control sound and vibration from connected Tactile devices.
 
