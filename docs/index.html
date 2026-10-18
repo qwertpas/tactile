@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#10151d">
+  <title>Tactile</title><link rel="stylesheet" href="style.css?v=3">
+</head>
+<body>
+<main>
+  <header><h1>Tactile</h1><span id="streamState">Disconnected</span></header>
+  <section class="connections" aria-label="Bluetooth connections">
+    <div><button id="sensorConnect">Connect pressures</button><span id="sensorState">Disconnected</span></div>
+    <div><button id="motorConnect">Connect vibration</button><span id="motorState">Disconnected</span></div>
+  </section>
+  <div id="error" role="alert" hidden></div>
+  <section class="controls" aria-label="Pressure controls">
+    <button id="zero" disabled>Zero pressure</button>
+    <button id="restart" disabled>Read sensors</button>
+    <button id="demo" disabled>Start BLE test stream</button>
+    <span id="baseline">Release sensors before zeroing.</span>
+  </section>
+  <section class="visuals" aria-label="Pressure display">
+    <div class="heatmap">
+      <h2>Pressure heatmap <small id="heatState">Waiting for data</small></h2>
+      <section class="readings" aria-label="Pressure channels 1 and 2 on the top row, 3 and 4 below">
+        <article><span>Channel 1</span><strong id="p0">—</strong><small id="rate0">— Hz</small></article>
+        <article><span>Channel 2</span><strong id="p1">—</strong><small id="rate1">— Hz</small></article>
+        <article><span>Channel 3</span><strong id="p2">—</strong><small id="rate2">— Hz</small></article>
+        <article><span>Channel 4</span><strong id="p3">—</strong><small id="rate3">— Hz</small></article>
+      </section>
+      <div class="heatScale" aria-label="Heatmap color scale from 0 to 30 kilopascals"><span>0 kPa</span><span>30 kPa</span></div>
+    </div>
+    <section class="chart"><canvas id="plot" aria-label="Four relative pressure traces over ten seconds, in kPa"></canvas></section>
+  </section>
+  <section class="outputs" aria-label="Sound and haptic feedback">
+    <div class="sound">
+      <div class="row"><button id="sound" disabled>Start sound</button><label>Mapping <select id="mode"><option>Bands</option><option>Vowels</option><option>Pulses</option><option>Stereo</option><option>Pure tones</option></select></label></div>
+      <label class="volume">Volume <output id="volumeValue">25%</output><input id="volume" type="range" min="0" max="100" value="25"></label>
+      <p id="soundInfo">Each pressure controls one noise voice, 0–30 kPa → silence to full volume.</p>
+      <small id="audioInfo">Audio stopped</small>
+    </div>
+    <div class="haptic">
+      <div class="row"><button id="haptic" disabled>Start haptics</button><strong id="duty">0%</strong></div>
+      <p>Highest pressure · 0–30 kPa → 20–100% constant duty</p>
+      <small id="motorInfo">Motor stopped</small>
+    </div>
+  </section>
+  <footer><span id="stats">No samples</span><a href="vowels/">Vowel recordings &amp; credits</a><span>Chrome or Edge · Bluetooth</span></footer>
+</main>
+<script type="module" src="app.js?v=5"></script>
+</body>
+</html>
