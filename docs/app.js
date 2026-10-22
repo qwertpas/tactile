@@ -16,9 +16,9 @@ function supported() {
   if (!navigator.bluetooth) throw Error('Open this page in Chrome or Edge with Bluetooth enabled. Use the published Tactile page.');
 }
 function fresh() { return !switching && pressures.fresh(performance.now()) && !document.hidden; }
-function output() {
+function output(packets = []) {
   const valid = fresh();
-  if (player) player.port.postMessage(valid ? { pressures: [...pressures.values] } : { stale: true });
+  if (player) player.port.postMessage(valid ? { pressures: [...pressures.values], packets } : { stale: true });
   if (hapticEnabled && writer) writer.set(valid ? motorDuty(pressures.values) : 0);
 }
 function stopHaptics() {
@@ -53,10 +53,9 @@ async function connectSensors() {
     sensorCharacteristic.addEventListener('characteristicvaluechanged', ({ target }) => {
       try {
         const now = performance.now();
-        for (const packet of decodeBatch(target.value)) {
-          if (packet.generation === generation) pressures.ingest(packet, now);
-        }
-        output();
+        const packets = decodeBatch(target.value).filter(packet => packet.generation === generation);
+        for (const packet of packets) pressures.ingest(packet, now);
+        output(packets);
       }
       catch (e) { ++malformed; error(e); stopHaptics(); }
     });
@@ -121,7 +120,7 @@ async function toggleSound() {
   try {
     if (!audio) {
       audio = new AudioContext({ latencyHint: 'interactive', sampleRate: 48000 });
-      await audio.audioWorklet.addModule(new URL('./audio.js?v=4', import.meta.url));
+      await audio.audioWorklet.addModule(new URL('./audio.js?v=6', import.meta.url));
       const vowels = await Promise.all(['ah', 'ee', 'oh', 'oo'].map(async vowel => {
         const response = await fetch(new URL(`./vowels/${vowel}.wav?v=4`, import.meta.url));
         if (!response.ok) throw Error(`Could not load the ${vowel} recording.`);
@@ -139,24 +138,28 @@ async function toggleSound() {
   } catch (e) { error(e); }
 }
 function controls() {
+  const mode = Number($('mode').value);
   $('volumeValue').textContent = `${$('volume').value}%`;
-  player?.port.postMessage({ volume: Number($('volume').value) / 100, mode: $('mode').selectedIndex });
+  $('gainValue').textContent = `${$('gain').value} dB`;
+  $('gainControl').hidden = mode !== 5;
+  player?.port.postMessage({ volume: Number($('volume').value) / 100, mode, gain: 10 ** (Number($('gain').value) / 20) });
   $('soundInfo').textContent = [
     'Four noise pitches: 220, 660, 1980, 5940 Hz. Each pressure controls its voice.',
     'Four continuous vowels: ah, ee, oh, oo, synthesized from human vocal cycles. Each pressure controls only volume.',
     'Four rhythms: 2, 3, 5, 7 pulses/second. Each pressure controls its rhythm.',
     'Low left, low right, high left, high right. Each pressure controls its position.',
     'Four pure sine tones: 220, 660, 1980, 5940 Hz. Each pressure controls only volume.',
-  ][$('mode').selectedIndex];
+    'Direct vibration · 8 Hz high-pass · channels 1 + 3 left, 2 + 4 right',
+  ][mode];
 }
 
 $('sensorConnect').onclick = connectSensors;
 $('motorConnect').onclick = connectMotor;
 $('restart').onclick = () => startStream('S');
 $('demo').onclick = () => startStream('D');
-$('zero').onclick = () => { if (pressures.zero()) output(); };
+$('zero').onclick = () => { if (pressures.zero()) { player?.port.postMessage({ reset: true }); output(); } };
 $('sound').onclick = toggleSound;
-$('volume').oninput = controls; $('mode').onchange = controls;
+$('volume').oninput = controls; $('gain').oninput = controls; $('mode').onchange = controls;
 $('haptic').onclick = () => {
   if (hapticEnabled) { stopHaptics(); return; }
   if (!writer || !fresh()) return;

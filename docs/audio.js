@@ -1,8 +1,25 @@
-// Gains change at the next 128-frame block, without pressure smoothing.
+// Each direct voice retains its own sample clock, high-pass state and FIFO.
+function directVoice() {
+  return { queue: Array(12).fill(0), position: 12, playing: false, next: null,
+    time: null, sequence: 0, rate: 500, last: null, high: 0, stamp: -Infinity };
+}
+
 class PressureAudio extends AudioWorkletProcessor {
   constructor(options) {
     super();
-    this.pressures = [0, 0, 0, 0]; this.volume = 0.25; this.mode = 0; this.enabled = false;
+    this.pressures = [0, 0, 0, 0]; this.volume = 0.25; this.mode = 5; this.enabled = false;
+    this.gain = 100;
+    this.direct = Array.from({ length: 4 }, directVoice);
+    // Windowed-sinc interpolation avoids the droop and images of linear playback.
+    this.kernel = Array.from({ length: 256 }, (_, phase) => {
+      const taps = Array.from({ length: 24 }, (_, i) => {
+        const x = i - 11 - phase / 256;
+        return Math.abs(x) >= 12 ? 0 : (x === 0 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x))
+          * (0.42 + 0.5 * Math.cos(Math.PI * x / 12) + 0.08 * Math.cos(Math.PI * x / 6));
+      });
+      const sum = taps.reduce((a, b) => a + b, 0);
+      return taps.map(value => value / sum);
+    });
     this.stamp = -Infinity; this.sample = 0;
     this.vowels = options.processorOptions.vowels; this.positions = [0, 0, 0, 0];
     const centers = [
@@ -19,14 +36,75 @@ class PressureAudio extends AudioWorkletProcessor {
     })));
     this.port.onmessage = ({ data }) => {
       if (data.pressures) { this.pressures = data.pressures; this.stamp = currentTime; }
-      if ('enabled' in data) this.enabled = data.enabled;
+      if ('enabled' in data && data.enabled !== this.enabled) {
+        this.enabled = data.enabled; this.direct = Array.from({ length: 4 }, directVoice);
+      }
       if ('volume' in data) this.volume = data.volume;
-      if ('mode' in data) this.mode = data.mode;
-      if (data.stale) this.stamp = -Infinity;
+      if ('gain' in data) this.gain = data.gain;
+      if ('mode' in data && data.mode !== this.mode) {
+        this.mode = data.mode; this.direct = Array.from({ length: 4 }, directVoice);
+      }
+      if (data.stale || data.reset) {
+        this.stamp = -Infinity; this.direct = Array.from({ length: 4 }, directVoice);
+      }
+      if (this.enabled && this.mode === 5 && data.packets)
+        for (const packet of data.packets) this.append(packet);
     };
+  }
+  append(packet) {
+    const { sensor, sequence, time, values } = packet;
+    let voice = this.direct[sensor];
+    // Do not interpolate across transport loss or a stream restart.
+    if (voice.next !== null && voice.next !== sequence) voice = this.direct[sensor] = directVoice();
+    voice.next = (sequence + values.length) >>> 0;
+    if (voice.time === null) { voice.time = time; voice.sequence = voice.next; }
+    const elapsed = (time - voice.time) >>> 0;
+    if (elapsed >= 500000) {
+      voice.rate = ((voice.next - voice.sequence) >>> 0) * 1e6 / elapsed;
+      if (elapsed >= 10000000) { voice.time = time; voice.sequence = voice.next; }
+    }
+    const alpha = Math.exp(-2 * Math.PI * 8 / voice.rate);
+    for (const value of values) {
+      if (voice.last === null) voice.last = value;
+      voice.high = alpha * (voice.high + value - voice.last);
+      voice.last = value;
+      voice.queue.push(voice.high);
+    }
+    voice.stamp = currentTime;
+  }
+  playDirect(left, right) {
+    left.fill(0); right.fill(0);
+    if (!this.enabled) return;
+    for (let sensor = 0; sensor < 4; ++sensor) {
+      const voice = this.direct[sensor], queue = voice.queue;
+      if (currentTime - voice.stamp >= 0.1) {
+        if (voice.next !== null) this.direct[sensor] = directVoice();
+        continue;
+      }
+      // About 40 ms of lookahead absorbs BLE batching; underruns wait for data.
+      if (!voice.playing && queue.length - voice.position >= 20) voice.playing = true;
+      if (!voice.playing) continue;
+      const output = sensor % 2 ? right : left, step = voice.rate / sampleRate;
+      for (let frame = 0; frame < output.length; ++frame) {
+        const index = Math.floor(voice.position);
+        if (index + 12 >= queue.length) { voice.playing = false; break; }
+        const taps = this.kernel[Math.floor((voice.position - index) * 256)];
+        let value = 0;
+        for (let tap = 0; tap < 24; ++tap) value += queue[index - 11 + tap] * taps[tap];
+        output[frame] += value * this.gain * this.volume * 0.5;
+        voice.position += step;
+      }
+      const consumed = Math.floor(voice.position) - 12;
+      if (consumed > 0) { queue.splice(0, consumed); voice.position -= consumed; }
+    }
+    for (let frame = 0; frame < left.length; ++frame) {
+      left[frame] = Math.max(-0.95, Math.min(0.95, left[frame]));
+      right[frame] = Math.max(-0.95, Math.min(0.95, right[frame]));
+    }
   }
   process(inputs, outputs) {
     const [left, right] = outputs[0];
+    if (this.mode === 5) { this.playDirect(left, right); return true; }
     const fresh = this.enabled && currentTime - this.stamp < 0.1;
     const gains = this.pressures.map(p => fresh ? Math.max(0, Math.min(1, p / 30)) * this.volume : 0);
     const voices = this.filters[this.mode];

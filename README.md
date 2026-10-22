@@ -12,6 +12,6 @@ View pressure readings and control sound and vibration from connected Tactile de
 4. Release all pressure inputs, then click **Zero pressure**.
 5. Click **Start sound** and/or **Start haptics**. Use the same buttons to stop.
 
-Choose a sound mapping and adjust **Volume** as needed. **Read sensors** restarts live readings; **Start BLE test stream** uses test data from the connected pressure device.
+**Direct vibration** is the default sound mapping and plays every received sample. Adjust **Gain** for vibration sensitivity and **Volume** for listening level. Other sound mappings remain available. **Read sensors** restarts live readings; **Start BLE test stream** uses test data from the connected pressure device.
 
 Keep the page visible while using feedback. If readings stop, reconnect and zero again.

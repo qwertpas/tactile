@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#10151d">
-  <title>Tactile</title><link rel="stylesheet" href="style.css?v=3">
+  <title>Tactile</title><link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <main>
@@ -34,9 +34,10 @@
   </section>
   <section class="outputs" aria-label="Sound and haptic feedback">
     <div class="sound">
-      <div class="row"><button id="sound" disabled>Start sound</button><label>Mapping <select id="mode"><option>Bands</option><option>Vowels</option><option>Pulses</option><option>Stereo</option><option>Pure tones</option></select></label></div>
+      <div class="row"><button id="sound" disabled>Start sound</button><label>Mapping <select id="mode"><option value="5" selected>Direct vibration</option><option value="0">Bands</option><option value="1">Vowels</option><option value="2">Pulses</option><option value="3">Stereo</option><option value="4">Pure tones</option></select></label></div>
       <label class="volume">Volume <output id="volumeValue">25%</output><input id="volume" type="range" min="0" max="100" value="25"></label>
-      <p id="soundInfo">Each pressure controls one noise voice, 0–30 kPa → silence to full volume.</p>
+      <label class="volume" id="gainControl">Gain <output id="gainValue">40 dB</output><input id="gain" type="range" min="0" max="80" step="5" value="40"></label>
+      <p id="soundInfo">Direct vibration · 8 Hz high-pass · channels 1 + 3 left, 2 + 4 right</p>
       <small id="audioInfo">Audio stopped</small>
     </div>
     <div class="haptic">
@@ -47,6 +48,6 @@
   </section>
   <footer><span id="stats">No samples</span><a href="vowels/">Vowel recordings &amp; credits</a><span>Chrome or Edge · Bluetooth</span></footer>
 </main>
-<script type="module" src="app.js?v=5"></script>
+<script type="module" src="app.js?v=6"></script>
 </body>
 </html>
